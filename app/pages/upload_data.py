@@ -6,22 +6,44 @@ import streamlit as st
 from pages.utils.elastic import create_index
 from pages.utils.elastic import delete_index
 from pages.utils.elastic import get_client
+from pages.utils.image_models import generate_image_description
+from pages.utils.image_models import load_model
 from PIL import Image
+
+
+@st.cache_resource
+def cache_load_model(model_id=None):
+    return load_model(model_id)
+
+
+@st.cache_resource
+def cache_generate_image_description(_image, _model, _processor):
+    return generate_image_description(_image, _model, _processor)
 
 
 def upload_data(**kwargs):
     pass
 
 
-def generate_image_description():
-    return "LLM things..."
-
+model = processor = None
+if "model" not in st.session_state:
+    st.session_state["model"] = None
+if "processor" not in st.session_state:
+    st.session_state["processor"] = None
 
 ES_CLIENT = get_client()
 st.title("Image Database")
-page_desc, ping_es, create_index_es, delete_index_es = st.columns(4)
+page_desc, load_model_col, ping_es, create_index_es, delete_index_es = st.columns(5)
 with page_desc:
     st.write("Upload new images to the index.")
+    if not (st.session_state.model and st.session_state.processor):
+        st.warning("The description model is not loaded yet!")
+    else:
+        st.success("The model is loaded!")
+with load_model_col:
+    if st.button("Load Model", use_container_width=True):
+        model, processor = cache_load_model()
+        st.text("Model loaded Successfully!")
 with ping_es:
     if st.button("Ping Engine", use_container_width=True):
         ping = ES_CLIENT.ping()
@@ -59,13 +81,13 @@ with preview_col:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", width=250)
 if uploaded_file is not None:
-    with st.spinner("Generating Description..."):
-        st.subheader("Auto-generated Description (optional)")
-        description = generate_image_description()
-        generated_text_query = st.text_input(
-            "Edit generated description (optional)",
-            value=description,
-        )
+    st.subheader("Auto-generated Description (optional)")
+    model, processor = cache_load_model()
+    description = cache_generate_image_description(image, model, processor)
+    generated_text_query = st.text_input(
+        "Edit generated description (optional)",
+        value=description,
+    )
 
 st.subheader("Description (optional)")
 text_query = st.text_input("Enter description (optional)")
