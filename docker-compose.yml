@@ -1,7 +1,7 @@
 services:
   # Elasticsearch service
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
     container_name: elasticsearch
     environment:
       - discovery.type=single-node
@@ -9,9 +9,8 @@ services:
       - ES_JAVA_OPTS=-Xms4g -Xmx4g
     ports:
       - "9200:9200"
-      - "9300:9300"
     volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
+      - elasticsearch-data:$HOME/NostalgiaElasticData
     networks:
       - app-network
     healthcheck:
@@ -37,6 +36,11 @@ services:
       - ./app:/app
     networks:
       - app-network
+    develop:
+      watch:
+        - action: sync
+          path: ./app
+          target: /app
 
 networks:
   app-network:

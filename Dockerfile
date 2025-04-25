@@ -1,5 +1,5 @@
 # Dockerfile
-FROM python:3.13-slim
+FROM pytorch/pytorch:2.7.0-cuda12.6-cudnn9-runtime
 
 WORKDIR /app
 
