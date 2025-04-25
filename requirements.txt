@@ -1,5 +1,6 @@
 accelerate==1.6.0
 altair==5.5.0
+annotated-types==0.7.0
 attrs==25.3.0
 black==25.1.0
 blinker==1.9.0
@@ -50,16 +51,21 @@ platformdirs==4.3.7
 protobuf==5.29.4
 psutil==7.0.0
 pyarrow==19.0.1
+pycountry==24.6.1
+pydantic==2.11.3
+pydantic_core==2.33.1
 pydeck==0.9.1
 python-dateutil==2.9.0.post0
-python-dotenv==0.19.2
+python-dotenv==1.1.0
 pytz==2025.2
 PyYAML==6.0.2
 referencing==0.36.2
 regex==2024.11.6
 requests==2.32.3
+reverse-geocoder==1.5.1
 rpds-py==0.24.0
 safetensors==0.5.3
+scipy==1.15.2
 six==1.17.0
 smmap==5.0.2
 streamlit==1.44.1
@@ -75,6 +81,7 @@ tornado==6.4.2
 tqdm==4.67.1
 transformers==4.51.3
 triton==3.3.0
+typing-inspection==0.4.0
 typing_extensions==4.13.2
 tzdata==2025.2
 urllib3==2.4.0
