@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import base64
 import datetime
 import hashlib
 import os
 import re
+from io import BytesIO
 
 import streamlit as st
 from pages.utils import journal
@@ -195,9 +197,13 @@ if st.button("Upload"):
     elif uploaded_file:
         with st.spinner("Uploading..."):
             # Call the placeholder function with whatever inputs are available
+            buffered = BytesIO()
+            image.save(buffered, format="JPEG")
+            img_str = base64.b64encode(buffered.getvalue())
             results = upload_data(
                 journal.Image(
                     id=generate_file_id(uploaded_file),
+                    base64=img_str,
                     title=title,
                     location=location,
                     date=date,

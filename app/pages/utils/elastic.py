@@ -60,3 +60,19 @@ def index_data(es_client: Elasticsearch, index_name: str, payload: dict):
         return True
     else:
         return False
+
+
+def search_data(
+    es_client: Elasticsearch,
+    index_name: str,
+    image_vector=None,
+    text_query=None,
+    text_vector=None,
+):
+    data = es_client.search(index=index_name)
+    if data:
+        if "hits" in data:
+            if "hits" in data["hits"]:
+                return data["hits"]["hits"]
+
+    return []

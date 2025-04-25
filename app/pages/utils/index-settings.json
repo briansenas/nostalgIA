@@ -51,6 +51,10 @@
         "type": "text",
         "analyzer": "spanish_custom"
       },
+      "base64": {
+        "type": "text",
+        "index": false
+      },
       "generated_description": {
         "type": "text",
         "analyzer": "spanish_custom"

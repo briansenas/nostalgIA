@@ -1,9 +1,18 @@
+from __future__ import annotations
+
+import base64
+import logging
+from io import BytesIO
+
 import streamlit as st
-import numpy as np
-import datetime
+from pages.utils.elastic import get_client
+from pages.utils.elastic import search_data
 from PIL import Image
 
-# Placeholder functions that you will implement later
+
+LOGGER = logging.getLogger(__file__)
+
+
 def search_engine(image_file=None, text_query=None, filters=None):
     """
     Placeholder function for the search engine that handles all search types
@@ -16,38 +25,11 @@ def search_engine(image_file=None, text_query=None, filters=None):
     Returns:
             List of search results
     """
-    # This function will be implemented by you to handle all search types
-    # For demonstration, return different dummy results based on inputs
 
-    if image_file and text_query:
-        return generate_dummy_results(4, "combined")
-    elif image_file:
-        return generate_dummy_results(5, "image")
-    elif text_query:
-        return generate_dummy_results(3, "text")
+    if image_file or text_query:
+        return search_data(get_client(), "images")
     else:
         return []
-
-
-def generate_dummy_results(count, search_type):
-    """Generate dummy search results for demonstration purposes"""
-    results = []
-    for i in range(count):
-        results.append(
-            {
-                "id": f"img_{i}",
-                "search_type": search_type,
-                "similarity_score": round(np.random.uniform(0.5, 0.95), 2),
-                "image_url": f"https://example.com/images/{i}.jpg",
-                "generated_description": f"Generated description for image {i}",
-                "description": f"User provided description for image {i}",
-                "tags": ["tag1", "tag2", "tag3"],
-                "date": datetime.datetime.now().strftime("%Y-%m-%d"),
-                "location": "Sample Location",
-                "person": "Sample Person",
-            }
-        )
-    return results
 
 
 def display_results(results):
@@ -56,39 +38,37 @@ def display_results(results):
         return
 
     st.subheader(f"Found {len(results)} results")
-
-    # Create columns for result display
     for i, result in enumerate(results):
+        document = result["_source"]
         with st.container():
-            col1, col2 = st.columns([1, 2])
+            col1, col2 = st.columns([1, 4])
 
             with col1:
-                # This would normally display the actual image
-                st.image("https://via.placeholder.com/150", caption=f"Image {i+1}")
-                st.write(f"Similarity: {result['similarity_score']}")
-                st.write(f"Search type: {result['search_type']}")
+                res_bites = BytesIO(base64.b64decode(document["base64"]))
+                res_im = Image.open(res_bites)
+                st.write(f"Similarity: {result['_score']}")
+                st.image(res_im, caption=document["title"], width=250)
 
             with col2:
                 st.markdown(
-                    f"**Generated Description**: {result['generated_description']}"
+                    f"**Generated Description**: {document['description_generated']}",
                 )
-                st.write(f"Description: {result['description']}")
-                st.write(f"Tags: {', '.join(result['tags'])}")
-                col_a, col_b, col_c = st.columns(3)
-                col_a.write(f"Date: {result['date']}")
-                col_b.write(f"Location: {result['location']}")
-                col_c.write(f"Person: {result['person']}")
+                st.write(f"Description: {document['description']}")
+                st.write(f"Tags: {', '.join(document['tags'])}")
+                st.write(f"Date: {document['date']}")
+                st.write(f"Location: {document['location']}")
 
             st.divider()
 
 
-
+ES_CLIENT = get_client()
 st.title("Image Search Engine")
 st.write("Search for images using image files, text queries, or both")
 
 st.subheader("Image Search")
 uploaded_file = st.file_uploader(
-    "Upload an image (optional)", type=["jpg", "jpeg", "png"]
+    "Upload an image (optional)",
+    type=["jpg", "jpeg", "png"],
 )
 
 if uploaded_file is not None:
@@ -140,6 +120,8 @@ if st.button("Search"):
         with st.spinner("Searching..."):
             # Call the placeholder function with whatever inputs are available
             results = search_engine(
-                image_file=uploaded_file, text_query=text_query, filters=filters
+                image_file=uploaded_file,
+                text_query=text_query,
+                filters=filters,
             )
             display_results(results)

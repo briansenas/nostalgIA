@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class Image(BaseModel):
     id: str | None
     title: str
+    base64: str
     location: str | None = None
     date: str | None = None
     description: str | None = None
