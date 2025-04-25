@@ -1,0 +1,94 @@
+{
+  "settings": {
+    "analysis": {
+      "char_filter": {
+        "remove_punctuation": {
+          "type": "pattern_replace",
+          "pattern": "[\\p{Punct}&&[^¿¡]]",
+          "replacement": ""
+        }
+      },
+      "filter": {
+        "spanish_stop": {
+          "type": "stop",
+          "stopwords": "_spanish_"
+        },
+        "spanish_stemmer": {
+          "type": "stemmer",
+          "language": "light_spanish"
+        },
+        "trim": {
+          "type": "trim"
+        },
+        "unique": {
+          "type": "unique",
+          "only_on_same_position": false
+        }
+      },
+      "analyzer": {
+        "spanish_custom": {
+          "type": "custom",
+          "char_filter": [
+            "html_strip",
+            "remove_punctuation"
+          ],
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase",
+            "asciifolding",
+            "trim",
+            "spanish_stop",
+            "spanish_stemmer",
+            "unique"
+          ]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "title": {
+        "type": "text",
+        "analyzer": "spanish_custom"
+      },
+      "generated_description": {
+        "type": "text",
+        "analyzer": "spanish_custom"
+      },
+      "description": {
+        "type": "text",
+        "analyzer": "spanish_custom"
+      },
+      "tags": {
+        "type": "nested"
+      },
+      "location": {
+        "type": "keyword"
+      },
+      "date": {
+        "type": "date_range"
+      },
+      "date_uploaded": {
+        "type": "date_range"
+      },
+      "description_embedding": {
+        "type": "dense_vector",
+        "dims": 512,
+        "index": true,
+        "similarity": "cosine"
+      },
+      "generated_description_embedding": {
+        "type": "dense_vector",
+        "dims": 512,
+        "index": true,
+        "similarity": "cosine"
+      },
+      "image_vector": {
+        "type": "dense_vector",
+        "dims": 512,
+        "index": true,
+        "similarity": "cosine"
+      }
+    }
+  }
+}
