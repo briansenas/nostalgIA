@@ -20,7 +20,8 @@ def load_model(model_id=None):
     model_id = model_id if model_id else GEMMA_MODEL_ID
     model = Gemma3ForConditionalGeneration.from_pretrained(
         model_id,
-        device_map="auto",
+        device_map="cuda",
+        torch_dtype=torch.bfloat16,
     ).eval()
     processor = AutoProcessor.from_pretrained(GEMMA_MODEL_ID, use_fast=True)
     return model, processor

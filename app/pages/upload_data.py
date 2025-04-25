@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import datetime
+import hashlib
+import os
 import re
 
 import streamlit as st
+from pages.utils import journal
 from pages.utils.elastic import create_index
 from pages.utils.elastic import delete_index
 from pages.utils.elastic import get_client
+from pages.utils.elastic import index_data
+from pages.utils.image_exif import get_location_name
 from pages.utils.image_models import generate_image_description
 from pages.utils.image_models import load_model
 from PIL import Image
@@ -13,7 +19,10 @@ from PIL import Image
 
 @st.cache_resource
 def cache_load_model(model_id=None):
-    return load_model(model_id)
+    model, processor = load_model(model_id)
+    st.session_state["model"] = True
+    st.session_state["processor"] = True
+    return model, processor
 
 
 @st.cache_resource
@@ -21,15 +30,68 @@ def cache_generate_image_description(_image, _model, _processor):
     return generate_image_description(_image, _model, _processor)
 
 
-def upload_data(**kwargs):
-    pass
+def get_exif_data(_image):
+    try:
+        exif_data = _image._getexif()
+        if exif_data is not None:
+            # Retrieve date and GPS coordinates
+            date = None
+            gps_info = None
+            for tag, value in exif_data.items():
+                if tag == 36867:  # DateTimeOriginal
+                    date = value
+                if tag == 34853:  # GPSInfo
+                    gps_info = value
+            res = "Unable to retrieve some metadata from the image."
+            if date:
+                date_obj = datetime.datetime.strptime(date, "%Y:%m:%d %H:%M:%S")
+                date = date_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
+            if not date or not gps_info:
+                st.warning(res)
+            return date, gps_info
+    # TODO: Should use specific exceptions
+    except Exception:
+        return None, None
+
+
+def validate_datetime_from_input(input):
+    try:
+        if input:
+            if "T" in input:
+                datetime.datetime.strptime(input, "%Y-%m-%dT%H:%M:%SZ")
+            else:
+                datetime.datetime.strptime(input, "%Y-%m-%d")
+        return True
+    # TODO: Should use specific exceptions
+    except Exception:
+        return False
+
+
+def generate_file_id(file):
+    # Create a sha256 hash object
+    hash_sha256 = hashlib.sha256()
+
+    # Read the file in chunks and update the hash
+    while chunk := file.read(8192):
+        hash_sha256.update(chunk)
+
+    # Return the hexadecimal representation of the hash
+    return hash_sha256.hexdigest()
+
+
+def upload_data(
+    payload: journal.Image,
+):
+    if not ES_CLIENT:
+        st.error("Unable to stablish connection with the search engine")
+    return index_data(ES_CLIENT, "images", payload.model_dump())
 
 
 model = processor = None
-if "model" not in st.session_state:
-    st.session_state["model"] = None
-if "processor" not in st.session_state:
-    st.session_state["processor"] = None
+st_env_keys = ["model", "processor", "llm_description", "filename"]
+for env in st_env_keys:
+    if env not in st.session_state:
+        st.session_state[env] = None
 
 ES_CLIENT = get_client()
 st.title("Image Database")
@@ -78,15 +140,32 @@ with upload_col:
     )
 with preview_col:
     if uploaded_file is not None:
+        if uploaded_file.name != st.session_state["filename"]:
+            st.session_state["filename"] = uploaded_file.name
+            cache_generate_image_description.clear()
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", width=250)
 if uploaded_file is not None:
+    image_date, image_gps_info = get_exif_data(image)
+    title_col, location_col, date_col = st.columns(3)
+    with title_col:
+        st.subheader("Title")
+        title = st.text_input("Title", value=os.path.basename(uploaded_file.name))
+    with location_col:
+        st.subheader("Location")
+        image_location = None
+        if image_gps_info:
+            image_location = get_location_name(image_gps_info)
+        location = st.text_input("Location", value=image_location)
+    with date_col:
+        st.subheader("Date")
+        date = st.text_input("Date", value=image_date)
     st.subheader("Auto-generated Description (optional)")
     model, processor = cache_load_model()
-    description = cache_generate_image_description(image, model, processor)
+    llm_description = cache_generate_image_description(image, model, processor)
     generated_text_query = st.text_input(
         "Edit generated description (optional)",
-        value=description,
+        value=llm_description,
     )
 
 st.subheader("Description (optional)")
@@ -108,12 +187,26 @@ if st.button("Upload"):
         st.warning(
             "Please provide a valid set of tags. E.g #biking #lisbon",
         )
-    else:
+    if not validate_datetime_from_input(date):
+        st.error(
+            "Please provide a valid date in the following format:"
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ or yyyy-MM-dd (E.g 2024-01-01T14:00:00.000Z)",
+        )
+    elif uploaded_file:
         with st.spinner("Uploading..."):
             # Call the placeholder function with whatever inputs are available
             results = upload_data(
-                image_file=uploaded_file,
-                text_query=text_query,
-                tags=tags_query,
+                journal.Image(
+                    id=generate_file_id(uploaded_file),
+                    title=title,
+                    location=location,
+                    date=date,
+                    description=text_query,
+                    generated_description=generated_text_query,
+                    tags=tags_query.split(" "),
+                ),
             )
-            st.success("✅ Image Uploaded")
+            if results:
+                st.success("✅ Image Uploaded")
+            else:
+                st.warning("❌ Unable to upload the image")

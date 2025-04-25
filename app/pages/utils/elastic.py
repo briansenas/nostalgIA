@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import datetime
 import json
+import logging
 import os
 from pathlib import Path
 
 from elasticsearch import Elasticsearch
 
 SCRIPT_PATH = Path(__file__).parent.absolute()
+LOGGER = logging.getLogger()
 
 
 def get_client():
@@ -41,6 +44,19 @@ def delete_index(es_client: Elasticsearch, index_name: str = "images"):
 
     if es_client.indices.exists(index=index_name):
         es_client.indices.delete(index=index_name)
+        return True
+    else:
+        return False
+
+
+def index_data(es_client: Elasticsearch, index_name: str, payload: dict):
+    if es_client is None or not isinstance(es_client, Elasticsearch):
+        raise ValueError("The ElasticSearch client must be valid.")
+
+    id = payload.get("id", None)
+    if es_client.indices.exists(index=index_name):
+        payload["date_indexed"] = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+        es_client.index(index=index_name, id=id, document=payload)
         return True
     else:
         return False

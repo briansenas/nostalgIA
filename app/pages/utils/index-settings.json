@@ -60,16 +60,18 @@
         "analyzer": "spanish_custom"
       },
       "tags": {
-        "type": "nested"
+        "type": "keyword"
       },
       "location": {
         "type": "keyword"
       },
       "date": {
-        "type": "date_range"
+        "type": "date",
+        "format": "date_optional_time"
       },
       "date_uploaded": {
-        "type": "date_range"
+        "type": "date",
+        "format":"date_optional_time"
       },
       "description_embedding": {
         "type": "dense_vector",
