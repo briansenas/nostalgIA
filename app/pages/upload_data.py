@@ -129,6 +129,7 @@ if "uploaded_file" not in st.session_state:
 
 if st.session_state["submitted"]:
     submit_action()
+    st.session_state["submitted"] = False
 
 ES_CLIENT = get_client()
 st.title("Image Database")
@@ -190,20 +191,26 @@ if uploaded_file is not None:
     title_col, location_col, date_col = st.columns(3)
     with title_col:
         st.subheader("Title")
-        if os.path.basename(uploaded_file.name) != st.session_state["title"]:
+        if (
+            st.session_state["title"] is None
+            and os.path.basename(uploaded_file.name) != st.session_state["title"]
+        ):
             st.session_state["title"] = os.path.basename(uploaded_file.name)
         title = st.text_input("Title", key="title")
     with location_col:
         st.subheader("Location")
-        image_location = None
+        location = None
         if image_gps_info:
-            image_location = cache_get_location_name(image_gps_info)
-        if st.session_state["location"] != image_location:
-            st.session_state["location"] = image_location
+            location = cache_get_location_name(image_gps_info)
+        if (
+            st.session_state["location"] is None
+            and st.session_state["location"] != location
+        ):
+            st.session_state["location"] = location
         location = st.text_input("Location", key="location")
     with date_col:
         st.subheader("Date")
-        if st.session_state["date"] != image_date:
+        if st.session_state["date"] is None and st.session_state["date"] != image_date:
             st.session_state["date"] = image_date
         date = st.text_input("Date", key="date")
     st.subheader("Auto-generated Description (optional)")
@@ -245,7 +252,9 @@ if st.button("Upload"):
         with st.spinner("Uploading..."):
             # Load clip and generate vectors
             clip_model, clip_processor = load_clip_model()
-            texts = [text_query, generated_text_query]
+            texts = [generated_text_query]
+            if text_query:
+                texts.append(text_query)
             texts_vectors = generate_text_vector(texts, clip_model)
             image_vector = generate_image_vector(image, clip_model, clip_processor)
             # Call the placeholder function with whatever inputs are available
@@ -255,18 +264,20 @@ if st.button("Upload"):
             results = upload_data(
                 journal.Image(
                     id=generate_file_id(uploaded_file),
-                    # TODO: Generate the vector of the image.
                     base64=img_str,
                     title=title,
                     location=location,
                     date=date,
-                    # TODO: Generate the vectors of the query.
                     description=text_query,
-                    description_embedding=texts_vectors[0].cpu().tolist(),
+                    description_embedding=(
+                        texts_vectors[1].cpu().tolist()
+                        if len(texts_vectors) > 1
+                        else None
+                    ),
                     generated_description=generated_text_query,
-                    generated_description_embedding=texts_vectors[1].cpu().tolist(),
+                    generated_description_embedding=texts_vectors[0].cpu().tolist(),
                     image_vector=image_vector.reshape(-1).cpu().tolist(),
-                    tags=tags_query.split(" "),
+                    tags=tags_query.split(" ") if tags_query else None,
                 ),
             )
             # Free up space

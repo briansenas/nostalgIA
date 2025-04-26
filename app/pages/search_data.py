@@ -7,16 +7,18 @@ from io import BytesIO
 import streamlit as st
 from pages.utils.elastic import get_client
 from pages.utils.elastic import search_data
+from pages.utils.image_models import generate_image_vector
+from pages.utils.image_models import generate_text_vector
+from pages.utils.image_models import load_clip_model
 from PIL import Image
 
 
 LOGGER = logging.getLogger(__file__)
 
 
-def search_engine(image_file=None, text_query=None, filters=None):
+def search_engine(image_vector=None, text_query=None, text_vector=None, filters=None):
     """
-    Placeholder function for the search engine that handles all search types
-
+    Function for the search engine that handles all search types
     Args:
             image_file: The uploaded image file (optional)
             text_query: The text query string (optional)
@@ -25,9 +27,14 @@ def search_engine(image_file=None, text_query=None, filters=None):
     Returns:
             List of search results
     """
-
-    if image_file or text_query:
-        return search_data(get_client(), "images")
+    if image_vector or text_query:
+        return search_data(
+            get_client(),
+            "images",
+            text_query=text_query,
+            text_vector=text_vector,
+            image_vector=image_vector,
+        )
     else:
         return []
 
@@ -46,15 +53,16 @@ def display_results(results):
             with col1:
                 res_bites = BytesIO(base64.b64decode(document["base64"]))
                 res_im = Image.open(res_bites)
+                st.write(f"Reciprocal Rank Similarity: {result['_rrf_score']}")
                 st.write(f"Similarity: {result['_score']}")
                 st.image(res_im, caption=document["title"], width=250)
 
             with col2:
                 st.markdown(
-                    f"**Generated Description**: {document['description_generated']}",
+                    f"**Generated Description**: {document['generated_description']}",
                 )
                 st.write(f"Description: {document['description']}")
-                st.write(f"Tags: {', '.join(document['tags'])}")
+                st.write(f"Tags: {', '.join(document['tags'] or [])}")
                 st.write(f"Date: {document['date']}")
                 st.write(f"Location: {document['location']}")
 
@@ -71,6 +79,7 @@ uploaded_file = st.file_uploader(
     type=["jpg", "jpeg", "png"],
 )
 
+image = None
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
     st.image(image, caption="Uploaded Image", width=250)
@@ -119,9 +128,24 @@ if st.button("Search"):
     else:
         with st.spinner("Searching..."):
             # Call the placeholder function with whatever inputs are available
+            # Load clip and generate vectors
+            clip_model, clip_processor = load_clip_model()
+            image_vector = text_vector = None
+            if text_query:
+                text_vector = (
+                    generate_text_vector([text_query], clip_model).cpu().tolist()[0]
+                )
+            if image is not None:
+                image_vector = (
+                    generate_image_vector(image, clip_model, clip_processor)
+                    .reshape(-1)
+                    .cpu()
+                    .tolist()
+                )
             results = search_engine(
-                image_file=uploaded_file,
+                image_vector=image_vector,
                 text_query=text_query,
+                text_vector=text_vector,
                 filters=filters,
             )
             display_results(results)
