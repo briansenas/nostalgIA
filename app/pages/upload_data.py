@@ -15,13 +15,16 @@ from pages.utils.elastic import get_client
 from pages.utils.elastic import index_data
 from pages.utils.image_exif import get_location_name
 from pages.utils.image_models import generate_image_description
-from pages.utils.image_models import load_model
+from pages.utils.image_models import generate_image_vector
+from pages.utils.image_models import generate_text_vector
+from pages.utils.image_models import load_clip_model
+from pages.utils.image_models import load_gemma_model
 from PIL import Image
 
 
 @st.cache_resource
-def cache_load_model(model_id=None):
-    model, processor = load_model(model_id)
+def cache_load_gemma_model(model_id=None):
+    model, processor = load_gemma_model(model_id)
     st.session_state["model"] = True
     st.session_state["processor"] = True
     return model, processor
@@ -32,7 +35,13 @@ def cache_generate_image_description(_image, _model, _processor):
     return generate_image_description(_image, _model, _processor)
 
 
-def get_exif_data(_image):
+@st.cache_resource
+def cache_get_location_name(_gps_info):
+    return get_location_name(_gps_info)
+
+
+@st.cache_resource
+def cache_get_exif_data(_image):
     try:
         exif_data = _image._getexif()
         if exif_data is not None:
@@ -89,11 +98,37 @@ def upload_data(
     return index_data(ES_CLIENT, "images", payload.model_dump())
 
 
+def submit_action():
+    # TODO: Is this really the correct way? Feels sketchy
+    # Reset all session state variables (widgets) after submit
+    for key in st.session_state.keys():
+        if key not in ["model", "processor", "uploaded_file"]:
+            st.session_state[key] = None
+        if key == "uploaded_file":
+            st.session_state["uploaded_file"] += 1
+
+
 model = processor = None
-st_env_keys = ["model", "processor", "llm_description", "filename"]
+st_env_keys = [
+    "submitted",
+    "model",
+    "processor",
+    "filename",
+    "generated_text_query",
+    "title",
+    "date",
+    "location",
+    "text_query",
+    "tags_query",
+]
 for env in st_env_keys:
     if env not in st.session_state:
         st.session_state[env] = None
+if "uploaded_file" not in st.session_state:
+    st.session_state["uploaded_file"] = 0
+
+if st.session_state["submitted"]:
+    submit_action()
 
 ES_CLIENT = get_client()
 st.title("Image Database")
@@ -106,7 +141,7 @@ with page_desc:
         st.success("The model is loaded!")
 with load_model_col:
     if st.button("Load Model", use_container_width=True):
-        model, processor = cache_load_model()
+        model, processor = cache_load_gemma_model()
         st.text("Model loaded Successfully!")
 with ping_es:
     if st.button("Ping Engine", use_container_width=True):
@@ -133,49 +168,61 @@ with delete_index_es:
             st.text("Index doesn't exist!")
 
 
-st.subheader("Image Search")
+st.subheader("Data Insertion Form")
 upload_col, preview_col = st.columns(2)
 with upload_col:
     uploaded_file = st.file_uploader(
         "Upload an image",
         type=["jpg", "jpeg", "png"],
+        key=f"uploaded_{st.session_state.uploaded_file}",
     )
 with preview_col:
     if uploaded_file is not None:
         if uploaded_file.name != st.session_state["filename"]:
             st.session_state["filename"] = uploaded_file.name
             cache_generate_image_description.clear()
+            cache_get_exif_data.clear()
+            cache_get_location_name.clear()
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", width=250)
 if uploaded_file is not None:
-    image_date, image_gps_info = get_exif_data(image)
+    image_date, image_gps_info = cache_get_exif_data(image)
     title_col, location_col, date_col = st.columns(3)
     with title_col:
         st.subheader("Title")
-        title = st.text_input("Title", value=os.path.basename(uploaded_file.name))
+        if os.path.basename(uploaded_file.name) != st.session_state["title"]:
+            st.session_state["title"] = os.path.basename(uploaded_file.name)
+        title = st.text_input("Title", key="title")
     with location_col:
         st.subheader("Location")
         image_location = None
         if image_gps_info:
-            image_location = get_location_name(image_gps_info)
-        location = st.text_input("Location", value=image_location)
+            image_location = cache_get_location_name(image_gps_info)
+        if st.session_state["location"] != image_location:
+            st.session_state["location"] = image_location
+        location = st.text_input("Location", key="location")
     with date_col:
         st.subheader("Date")
-        date = st.text_input("Date", value=image_date)
+        if st.session_state["date"] != image_date:
+            st.session_state["date"] = image_date
+        date = st.text_input("Date", key="date")
     st.subheader("Auto-generated Description (optional)")
-    model, processor = cache_load_model()
+    model, processor = cache_load_gemma_model()
     llm_description = cache_generate_image_description(image, model, processor)
+    if st.session_state["generated_text_query"] != llm_description:
+        st.session_state["generated_text_query"] = llm_description
     generated_text_query = st.text_input(
         "Edit generated description (optional)",
-        value=llm_description,
+        key="generated_text_query",
     )
 
 st.subheader("Description (optional)")
-text_query = st.text_input("Enter description (optional)")
+text_query = st.text_input("Enter description (optional)", key="text_query")
 
 st.subheader("Tags (optional)")
 tags_query = st.text_input(
     "Enter tags (optional, comma-separated-hastags, e.g #biking #germany)",
+    key="tags_query",
 )
 tags_regex = re.compile(r"^(#\w+)(\s#\w+)*$")
 if tags_query:
@@ -196,6 +243,11 @@ if st.button("Upload"):
         )
     elif uploaded_file:
         with st.spinner("Uploading..."):
+            # Load clip and generate vectors
+            clip_model, clip_processor = load_clip_model()
+            texts = [text_query, generated_text_query]
+            texts_vectors = generate_text_vector(texts, clip_model)
+            image_vector = generate_image_vector(image, clip_model, clip_processor)
             # Call the placeholder function with whatever inputs are available
             buffered = BytesIO()
             image.save(buffered, format="JPEG")
@@ -203,16 +255,25 @@ if st.button("Upload"):
             results = upload_data(
                 journal.Image(
                     id=generate_file_id(uploaded_file),
+                    # TODO: Generate the vector of the image.
                     base64=img_str,
                     title=title,
                     location=location,
                     date=date,
+                    # TODO: Generate the vectors of the query.
                     description=text_query,
+                    description_embedding=texts_vectors[0].cpu().tolist(),
                     generated_description=generated_text_query,
+                    generated_description_embedding=texts_vectors[1].cpu().tolist(),
+                    image_vector=image_vector.reshape(-1).cpu().tolist(),
                     tags=tags_query.split(" "),
                 ),
             )
+            # Free up space
+            del texts, texts_vectors, image_vector
             if results:
                 st.success("✅ Image Uploaded")
             else:
                 st.warning("❌ Unable to upload the image")
+            st.session_state["submitted"] = True
+            st.rerun()

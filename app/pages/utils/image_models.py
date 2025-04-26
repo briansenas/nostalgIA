@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 
+import clip
 import torch
 from huggingface_hub import login
 from PIL import Image
@@ -14,13 +15,31 @@ assert HF_TOKEN is not None
 login(os.environ.get("HF_TOKEN"), new_session=True)
 
 GEMMA_MODEL_ID = "google/gemma-3-4b-it"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def load_model(model_id=None):
+def load_clip_model(model_id=None):
+    model, preprocess = clip.load("ViT-B/32", device=DEVICE)
+    return model, preprocess
+
+
+def generate_image_vector(image, model, preprocess):
+    image = preprocess(image).unsqueeze(0).to(DEVICE)
+    image_features = model.encode_image(image)
+    return image_features
+
+
+def generate_text_vector(texts, model):
+    texts_tokens = clip.tokenize(texts).to(DEVICE)
+    texts_features = model.encode_text(texts_tokens)
+    return texts_features
+
+
+def load_gemma_model(model_id=None):
     model_id = model_id if model_id else GEMMA_MODEL_ID
     model = Gemma3ForConditionalGeneration.from_pretrained(
         model_id,
-        device_map="cuda",
+        device_map=DEVICE,
         torch_dtype=torch.bfloat16,
     ).eval()
     processor = AutoProcessor.from_pretrained(GEMMA_MODEL_ID, use_fast=True)
@@ -90,5 +109,5 @@ Format: Only include one to two factual and descriptive sentences per image. Do 
 if __name__ == "__main__":
     example_image = "example-image.jpg"
     image = Image.open(example_image)
-    model, processor = load_model()
+    model, processor = load_gemma_model()
     print(generate_image_description(image, model, processor))
