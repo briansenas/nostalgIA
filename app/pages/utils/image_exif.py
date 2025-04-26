@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pycountry
 import reverse_geocoder as rg
+from PIL import Image
 from PIL.ExifTags import GPSTAGS
+from PIL.ExifTags import TAGS
+from PIL.Image import Exif
 
 # TODO: pycountry and reverse_geocoder can only output in English...
 
@@ -26,6 +29,12 @@ def exif_to_dict(gps_info):
     return gps_data
 
 
+def get_location_info(coordinates):
+    location_info = rg.search(coordinates)[0]
+    location_info["country"] = pycountry.countries.get(alpha_2=location_info["cc"])
+    return location_info
+
+
 def coordinates_to_country_data(gps_info):
     gps_info = exif_to_dict(gps_info)
     gps_latitude = gps_info["GPSLatitude"]
@@ -38,9 +47,7 @@ def coordinates_to_country_data(gps_info):
         gps_longitude_ref,
     )
     coordinates = (decimal_latitude, decimal_longitude)
-    location_info = rg.search(coordinates)[0]
-    location_info["country"] = pycountry.countries.get(alpha_2=location_info["cc"])
-    return location_info
+    return get_location_info(coordinates)
 
 
 def get_location_name(gps_info):
@@ -50,3 +57,25 @@ def get_location_name(gps_info):
     # cc = location_info["cc"]
     country = location_info["country"]
     return city, country.name
+
+
+# https://github.com/python-pillow/Pillow/issues/5863
+def get_exif(file_name) -> Exif:
+    image: Image.Image = Image.open(file_name)
+    return image.getexif()
+
+
+def get_geo(exif):
+    for key, value in TAGS.items():
+        if value == "GPSInfo":
+            break
+    gps_info = exif.get_ifd(key)
+    return {GPSTAGS.get(key, key): value for key, value in gps_info.items()}
+
+
+def get_exif_ifd(exif):
+    for key, value in TAGS.items():
+        if value == "ExifOffset":
+            break
+    info = exif.get_ifd(key)
+    return {TAGS.get(key, key): value for key, value in info.items()}

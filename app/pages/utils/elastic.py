@@ -166,13 +166,16 @@ def search_data(
                 ]
             },
         )
-    return reciprocal_rank_fusion(
-        es_client=es_client,
-        index_name=index_name,
-        queries=queries,
-        k=rrf_k,
-        top_n=top_n,
-    )
+    if queries:
+        return reciprocal_rank_fusion(
+            es_client=es_client,
+            index_name=index_name,
+            queries=queries,
+            k=rrf_k,
+            top_n=top_n,
+        )
+    else:
+        return es_client.search(index=index_name, size=top_n)["hits"]["hits"]
 
 
 def reciprocal_rank_fusion(

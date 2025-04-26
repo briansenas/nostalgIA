@@ -13,6 +13,8 @@ from pages.utils.elastic import create_index
 from pages.utils.elastic import delete_index
 from pages.utils.elastic import get_client
 from pages.utils.elastic import index_data
+from pages.utils.image_exif import get_exif_ifd
+from pages.utils.image_exif import get_geo
 from pages.utils.image_exif import get_location_name
 from pages.utils.image_models import generate_image_description
 from pages.utils.image_models import generate_image_vector
@@ -20,6 +22,9 @@ from pages.utils.image_models import generate_text_vector
 from pages.utils.image_models import load_clip_model
 from pages.utils.image_models import load_gemma_model
 from PIL import Image
+from pillow_heif import register_heif_opener
+
+register_heif_opener()
 
 
 @st.cache_resource
@@ -43,24 +48,14 @@ def cache_get_location_name(_gps_info):
 @st.cache_resource
 def cache_get_exif_data(_image):
     try:
-        exif_data = _image._getexif()
-        if exif_data is not None:
-            # Retrieve date and GPS coordinates
-            date = None
-            gps_info = None
-            for tag, value in exif_data.items():
-                if tag == 36867:  # DateTimeOriginal
-                    date = value
-                if tag == 34853:  # GPSInfo
-                    gps_info = value
-            res = "Unable to retrieve some metadata from the image."
-            if date:
-                date_obj = datetime.datetime.strptime(date, "%Y:%m:%d %H:%M:%S")
-                date = date_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
-            if not date or not gps_info:
-                st.warning(res)
-            return date, gps_info
-    # TODO: Should use specific exceptions
+        exif_data = _image.getexif()
+        gps_info = get_geo(exif_data)
+        exif_info = get_exif_ifd(exif_data)
+        date = exif_info["DateTimeOriginal"]
+        if date:
+            date_obj = datetime.datetime.strptime(date, "%Y:%m:%d %H:%M:%S")
+            date = date_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return date, gps_info
     except Exception:
         return None, None
 
@@ -96,14 +91,20 @@ def upload_data(
     return index_data(ES_CLIENT, "images", payload.model_dump())
 
 
+def clear_fields():
+    for key in st.session_state.keys():
+        if (
+            key not in ["model", "processor", "uploaded_file", "filename"]
+            and "uploaded" not in key
+        ):
+            st.session_state[key] = None
+
+
 def submit_action():
     # TODO: Is this really the correct way? Feels sketchy
     # Reset all session state variables (widgets) after submit
-    for key in st.session_state.keys():
-        if key not in ["model", "processor", "uploaded_file"]:
-            st.session_state[key] = None
-        if key == "uploaded_file":
-            st.session_state["uploaded_file"] += 1
+    clear_fields()
+    st.session_state["uploaded_file"] += 1
 
 
 model = processor = None
@@ -173,20 +174,25 @@ upload_col, preview_col = st.columns(2)
 with upload_col:
     uploaded_file = st.file_uploader(
         "Upload an image",
-        type=["jpg", "jpeg", "png"],
+        type=["jpg", "jpeg", "png", "heic"],
         key=f"uploaded_{st.session_state.uploaded_file}",
+        on_change=clear_fields,
     )
 with preview_col:
     if uploaded_file is not None:
         if uploaded_file.name != st.session_state["filename"]:
             st.session_state["filename"] = uploaded_file.name
+            st.session_state["title"] = uploaded_file.name
             cache_generate_image_description.clear()
             cache_get_exif_data.clear()
             cache_get_location_name.clear()
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", width=250)
 if uploaded_file is not None:
-    image_date, image_gps_info = cache_get_exif_data(image)
+    try:
+        image_date, image_gps_info = cache_get_exif_data(image)
+    except TypeError:
+        image_date = image_gps_info = None
     title_col, city_col, country_col, date_col = st.columns(4)
     city = country = None
     if image_gps_info:

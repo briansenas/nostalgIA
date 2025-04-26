@@ -28,17 +28,14 @@ def search_engine(image_vector=None, text_query=None, text_vector=None, filters=
     Returns:
             List of search results
     """
-    if image_vector or text_query:
-        return search_data(
-            get_client(),
-            "images",
-            text_query=text_query,
-            text_vector=text_vector,
-            image_vector=image_vector,
-            filters=filters,
-        )
-    else:
-        return []
+    return search_data(
+        get_client(),
+        "images",
+        text_query=text_query,
+        text_vector=text_vector,
+        image_vector=image_vector,
+        filters=filters,
+    )
 
 
 def fetch_facets(fields=["city", "country"], size: int = 20):
@@ -144,29 +141,26 @@ filters = {
 
 # Search button
 if st.button("Search"):
-    if uploaded_file is None and not text_query:
-        st.warning("Please provide either an image or text for search.")
-    else:
-        with st.spinner("Searching..."):
-            # Call the placeholder function with whatever inputs are available
-            # Load clip and generate vectors
-            clip_model, clip_processor = load_clip_model()
-            image_vector = text_vector = None
-            if text_query:
-                text_vector = (
-                    generate_text_vector([text_query], clip_model).cpu().tolist()[0]
-                )
-            if image is not None:
-                image_vector = (
-                    generate_image_vector(image, clip_model, clip_processor)
-                    .reshape(-1)
-                    .cpu()
-                    .tolist()
-                )
-            results = search_engine(
-                image_vector=image_vector,
-                text_query=text_query,
-                text_vector=text_vector,
-                filters=filters,
+    with st.spinner("Searching..."):
+        # Call the placeholder function with whatever inputs are available
+        # Load clip and generate vectors
+        clip_model, clip_processor = load_clip_model()
+        image_vector = text_vector = None
+        if text_query:
+            text_vector = (
+                generate_text_vector([text_query], clip_model).cpu().tolist()[0]
             )
-            display_results(results)
+        if image:
+            image_vector = (
+                generate_image_vector(image, clip_model, clip_processor)
+                .reshape(-1)
+                .cpu()
+                .tolist()
+            )
+        results = search_engine(
+            image_vector=image_vector,
+            text_query=text_query,
+            text_vector=text_vector,
+            filters=filters,
+        )
+        display_results(results)

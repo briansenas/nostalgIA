@@ -4,10 +4,10 @@ FROM pytorch/pytorch:2.7.0-cuda12.6-cudnn9-runtime
 WORKDIR /app
 
 # Install dependencies
+RUN apt-get update && apt-get install git exiftool -y
+RUN pip install --no-cache-dir git+https://github.com/openai/CLIP.git
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN apt-get update && apt-get install git -y
-RUN pip install --no-cache-dir git+https://github.com/openai/CLIP.git
 
 # Copy application code
 COPY app/ .
