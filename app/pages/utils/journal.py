@@ -8,7 +8,8 @@ class Image(BaseModel):
     title: str
     base64: str
     image_vector: list[float]
-    location: str | None = None
+    city: str | None = None
+    country: str | None = None
     date: str | None = None
     description: str | None = None
     description_embedding: list[float] | None = None

@@ -82,9 +82,7 @@ def generate_file_id(file):
     # Create a sha256 hash object
     hash_sha256 = hashlib.sha256()
 
-    # Read the file in chunks and update the hash
-    while chunk := file.read(8192):
-        hash_sha256.update(chunk)
+    hash_sha256.update(file.getvalue())
 
     # Return the hexadecimal representation of the hash
     return hash_sha256.hexdigest()
@@ -117,7 +115,8 @@ st_env_keys = [
     "generated_text_query",
     "title",
     "date",
-    "location",
+    "city",
+    "country",
     "text_query",
     "tags_query",
 ]
@@ -188,7 +187,10 @@ with preview_col:
         st.image(image, caption="Uploaded Image", width=250)
 if uploaded_file is not None:
     image_date, image_gps_info = cache_get_exif_data(image)
-    title_col, location_col, date_col = st.columns(3)
+    title_col, city_col, country_col, date_col = st.columns(4)
+    city = country = None
+    if image_gps_info:
+        city, country = cache_get_location_name(image_gps_info)
     with title_col:
         st.subheader("Title")
         if (
@@ -197,17 +199,19 @@ if uploaded_file is not None:
         ):
             st.session_state["title"] = os.path.basename(uploaded_file.name)
         title = st.text_input("Title", key="title")
-    with location_col:
-        st.subheader("Location")
-        location = None
-        if image_gps_info:
-            location = cache_get_location_name(image_gps_info)
+    with city_col:
+        st.subheader("City")
+        if st.session_state["city"] is None and st.session_state["city"] != city:
+            st.session_state["city"] = city
+        city = st.text_input("City", key="city")
+    with country_col:
+        st.subheader("Country")
         if (
-            st.session_state["location"] is None
-            and st.session_state["location"] != location
+            st.session_state["country"] is None
+            and st.session_state["country"] != country
         ):
-            st.session_state["location"] = location
-        location = st.text_input("Location", key="location")
+            st.session_state["country"] = country
+        country = st.text_input("Country", key="country")
     with date_col:
         st.subheader("Date")
         if st.session_state["date"] is None and st.session_state["date"] != image_date:
@@ -266,7 +270,8 @@ if st.button("Upload"):
                     id=generate_file_id(uploaded_file),
                     base64=img_str,
                     title=title,
-                    location=location,
+                    city=city,
+                    country=country,
                     date=date,
                     description=text_query,
                     description_embedding=(

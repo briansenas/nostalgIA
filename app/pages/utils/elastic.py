@@ -5,7 +5,9 @@ import json
 import logging
 import os
 from collections import defaultdict
+from collections.abc import MutableMapping
 from pathlib import Path
+from typing import Any
 
 from elasticsearch import Elasticsearch
 
@@ -63,17 +65,55 @@ def index_data(es_client: Elasticsearch, index_name: str, payload: dict):
         return False
 
 
+def get_facets(es_client: Elasticsearch, index_name: str, fields: list[str], size=20):
+    payload: MutableMapping = {"size": 0, "aggs": {}}
+    for field in fields:
+        payload["aggs"][f"{field}_facet"] = {
+            "terms": {"field": field, "size": size},
+        }
+    response = es_client.search(index=index_name, body=payload)
+    results = {}
+    for field in fields:
+        results[field] = [
+            bucket["key"]
+            for bucket in response["aggregations"][f"{field}_facet"]["buckets"]
+        ]
+    return results
+
+
 def search_data(
     es_client: Elasticsearch,
     index_name: str,
     image_vector=None,
     text_query=None,
     text_vector=None,
+    filters=None,
     knn_k=5,
     rrf_k=60,
     top_n=100,
 ):
     queries = []
+    filter_dict: dict[str, Any] = {"filter": []}
+    for key, filter_ in filters.items():
+        enabled = filter_["enabled"]
+        if enabled:
+            if "value" in filter_:
+                data = filter_["value"]
+                if isinstance(data, list):
+                    filter_dict["filter"].append({"terms": {key: filter_["value"]}})
+                else:
+                    filter_dict["filter"].append({"term": {key: filter_["value"]}})
+            else:
+                range_ = {}
+                start_ = filter_["start"]
+                end_ = filter_["end"]
+                if start_:
+                    range_["gte"] = start_
+                if end_:
+                    range_["lte"] = end_
+                if range_:
+                    filter_dict["filter"].append({"range": {key: range_}})
+
     if image_vector:
         queries.append(
             {
@@ -82,6 +122,7 @@ def search_data(
                     "query_vector": image_vector,
                     "k": knn_k,
                     "num_candidates": top_n,
+                    **filter_dict,
                 },
             },
         )
@@ -89,16 +130,22 @@ def search_data(
         queries.append(
             {
                 "query": {
-                    "multi_match": {
-                        "query": text_query,
-                        "type": "most_fields",
-                        "fields": [
-                            "title^1",
-                            "description^3",
-                            "location^0.5",
-                            "generated_description^2",
-                        ],
-                        "operator": "or",
+                    "bool": {
+                        "must": {
+                            "multi_match": {
+                                "query": text_query,
+                                "type": "most_fields",
+                                "fields": [
+                                    "title^1",
+                                    "description^3",
+                                    "location^0.5",
+                                    "generated_description^2",
+                                ],
+                                "operator": "or",
+                                "fuzziness": "auto",
+                            },
+                        },
+                        **filter_dict,
                     },
                 },
             },
@@ -111,6 +158,7 @@ def search_data(
                     "query_vector": text_vector,
                     "k": knn_k,
                     "num_candidates": top_n,
+                    **filter_dict,
                 }
                 for field in [
                     "description_embedding",

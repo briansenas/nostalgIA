@@ -46,7 +46,7 @@ def coordinates_to_country_data(gps_info):
 def get_location_name(gps_info):
     location_info = coordinates_to_country_data(gps_info)
     city = location_info["name"]
-    state = location_info["admin1"]
-    cc = location_info["cc"]
+    # state = location_info["admin1"]
+    # cc = location_info["cc"]
     country = location_info["country"]
-    return f"{city}, {state}, {country.name}({cc})"
+    return city, country.name

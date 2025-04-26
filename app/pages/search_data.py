@@ -6,6 +6,7 @@ from io import BytesIO
 
 import streamlit as st
 from pages.utils.elastic import get_client
+from pages.utils.elastic import get_facets
 from pages.utils.elastic import search_data
 from pages.utils.image_models import generate_image_vector
 from pages.utils.image_models import generate_text_vector
@@ -34,9 +35,14 @@ def search_engine(image_vector=None, text_query=None, text_vector=None, filters=
             text_query=text_query,
             text_vector=text_vector,
             image_vector=image_vector,
+            filters=filters,
         )
     else:
         return []
+
+
+def fetch_facets(fields=["city", "country"], size: int = 20):
+    return get_facets(get_client(), "images", fields, size=size)
 
 
 def display_results(results):
@@ -64,7 +70,8 @@ def display_results(results):
                 st.write(f"Description: {document['description']}")
                 st.write(f"Tags: {', '.join(document['tags'] or [])}")
                 st.write(f"Date: {document['date']}")
-                st.write(f"Location: {document['location']}")
+                st.write(f"City: {document['city']}")
+                st.write(f"Country: {document['country']}")
 
             st.divider()
 
@@ -100,25 +107,39 @@ if use_date_filter:
     start_date = col1.date_input("Start date")
     end_date = col2.date_input("End date")
 
-# Location filter
-st.sidebar.subheader("Location Filter")
-use_location_filter = st.sidebar.checkbox("Filter by location")
-location = None
-if use_location_filter:
-    location = st.sidebar.text_input("Location")
+facets = fetch_facets()
+cities, countries = facets["city"], facets["country"]
 
-# Person filter
-st.sidebar.subheader("Person Filter")
-use_person_filter = st.sidebar.checkbox("Filter by person")
-person = None
-if use_person_filter:
-    person = st.sidebar.text_input("Person")
+st.sidebar.subheader("City Filter")
+use_city_filter = st.sidebar.checkbox("Filter by city")
+selected_cities = []
+if use_city_filter:
+    for city in cities:
+        if st.sidebar.checkbox(city, key=f"{city}_facet"):
+            selected_cities.append(city)
+
+st.sidebar.subheader("Country Filter")
+use_country_filter = st.sidebar.checkbox("Filter by country")
+selected_countries = []
+if use_country_filter:
+    for country in countries:
+        if st.sidebar.checkbox(country, key=f"{country}_facet"):
+            selected_countries.append(country)
 
 # Collect all filters
 filters = {
-    "date": {"enabled": use_date_filter, "start": start_date, "end": end_date},
-    "location": {"enabled": use_location_filter, "value": location},
-    "person": {"enabled": use_person_filter, "value": person},
+    "date": {
+        "enabled": use_date_filter,
+        "start": start_date,
+        "end": end_date,
+        "type": "date-range",
+    },
+    "city": {"enabled": use_city_filter, "value": selected_cities, "type": "term"},
+    "country": {
+        "enabled": use_country_filter,
+        "value": selected_countries,
+        "type": "term",
+    },
 }
 
 # Search button
