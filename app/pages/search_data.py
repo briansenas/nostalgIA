@@ -56,19 +56,25 @@ def display_results(results):
             with col1:
                 res_bites = BytesIO(base64.b64decode(document["base64"]))
                 res_im = Image.open(res_bites)
-                st.write(f"Reciprocal Rank Similarity: {result['_rrf_score']}")
+                if "_rrf_score" in result:
+                    st.write(f"Reciprocal Rank Similarity: {result['_rrf_score']}")
                 st.write(f"Similarity: {result['_score']}")
-                st.image(res_im, caption=document["title"], width=250)
+                st.image(
+                    res_im,
+                    caption=document["title"],
+                    width=250,
+                    use_container_width=True,
+                )
 
             with col2:
                 st.markdown(
                     f"**Generated Description**: {document['generated_description']}",
                 )
-                st.write(f"Description: {document['description']}")
-                st.write(f"Tags: {', '.join(document['tags'] or [])}")
-                st.write(f"Date: {document['date']}")
-                st.write(f"City: {document['city']}")
-                st.write(f"Country: {document['country']}")
+                st.write(f"**Description**: {document['description']}")
+                st.write(f"**Tags**: {', '.join(document['tags'] or [])}")
+                st.write(f"**Date**: {document['date']}")
+                st.write(f"**City**: {document['city']}")
+                st.write(f"**Country**: {document['country']}")
 
             st.divider()
 
@@ -80,7 +86,7 @@ st.write("Search for images using image files, text queries, or both")
 st.subheader("Image Search")
 uploaded_file = st.file_uploader(
     "Upload an image (optional)",
-    type=["jpg", "jpeg", "png"],
+    type=["jpg", "jpeg", "png", "heic"],
 )
 
 image = None

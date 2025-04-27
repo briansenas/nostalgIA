@@ -99,11 +99,11 @@ def search_data(
         if enabled:
             if "value" in filter_:
                 data = filter_["value"]
-                if isinstance(data, list):
+                if data and isinstance(data, list):
                     filter_dict["filter"].append({"terms": {key: filter_["value"]}})
-                else:
+                elif data:
                     filter_dict["filter"].append({"term": {key: filter_["value"]}})
-            else:
+            elif filter_["start"] or filter_["end"]:
                 range_ = {}
                 start_ = filter_["start"]
                 end_ = filter_["end"]
@@ -175,7 +175,12 @@ def search_data(
             top_n=top_n,
         )
     else:
-        return es_client.search(index=index_name, size=top_n)["hits"]["hits"]
+        query = {
+            "query": {"bool": {**filter_dict}},
+        }
+        return es_client.search(index=index_name, size=top_n, body=query)["hits"][
+            "hits"
+        ]
 
 
 def reciprocal_rank_fusion(

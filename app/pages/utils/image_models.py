@@ -30,7 +30,9 @@ def generate_image_vector(image, model, preprocess):
 
 
 def generate_text_vector(texts, model):
-    texts_tokens = clip.tokenize(texts).to(DEVICE)
+    # TODO: Maybe we should store a list of dense vectors for each phrase and avoid
+    # information loss due to truncation
+    texts_tokens = clip.tokenize(texts, truncate=True).to(DEVICE)
     texts_features = model.encode_text(texts_tokens)
     return texts_features
 

@@ -36,6 +36,11 @@ def cache_load_gemma_model(model_id=None):
 
 
 @st.cache_resource
+def cache_load_clip_model():
+    return load_clip_model()
+
+
+@st.cache_resource
 def cache_generate_image_description(_image, _model, _processor):
     return generate_image_description(_image, _model, _processor)
 
@@ -226,7 +231,10 @@ if uploaded_file is not None:
     st.subheader("Auto-generated Description (optional)")
     model, processor = cache_load_gemma_model()
     llm_description = cache_generate_image_description(image, model, processor)
-    if st.session_state["generated_text_query"] != llm_description:
+    if (
+        st.session_state["generated_text_query"] is None
+        and st.session_state["generated_text_query"] != llm_description
+    ):
         st.session_state["generated_text_query"] = llm_description
     generated_text_query = st.text_input(
         "Edit generated description (optional)",
@@ -261,7 +269,7 @@ if st.button("Upload"):
     elif uploaded_file:
         with st.spinner("Uploading..."):
             # Load clip and generate vectors
-            clip_model, clip_processor = load_clip_model()
+            clip_model, clip_processor = cache_load_clip_model()
             texts = [generated_text_query]
             if text_query:
                 texts.append(text_query)
