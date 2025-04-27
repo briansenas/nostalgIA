@@ -3,6 +3,8 @@ Welcome to NostalgIA, a personal photo-diary application supercharged with an In
 
 This project combines the simplicity of writing daily entries with the power of Elasticsearch for fast, intelligent hybrid search, and a Streamlit web app for a beautiful, interactive interface.
 
+<img style="padding-bottom:2em;max-width:50%;height:auto;display:block;margin-left:auto;margin-right:auto" alt="Preview of the search page with 12 results." src="imgs/ExampleSearch.png"/>
+
 ## 🚀 Quick Start: Run with Docker Compose
 
 We use **Docker Compose** to spin up two services:
@@ -99,8 +101,10 @@ The app will be available at http://localhost:8501.
 # 🧹 Future Improvements
 - [ ] Develop bulk insertion page
 - [ ] Develop way to edit Entries
+- [ ] Develop way to delete Entries
 - [ ] Improve UI
     - [ ] Improve facets sidebar. Include facet count.
     - [ ] Use selection boxes in upload page for city/country (avoid user error)
+    - [ ] Unify language of the Country / City field.
 - [ ] Clean up and refactor code for future-proof
 - [ ] Improve search process
