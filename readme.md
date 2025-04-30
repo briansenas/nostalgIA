@@ -106,5 +106,6 @@ The app will be available at http://localhost:8501.
     - [ ] Improve facets sidebar. Include facet count.
     - [ ] Use selection boxes in upload page for city/country (avoid user error)
     - [ ] Unify language of the Country / City field.
+    - [X] Add an option to be able to rotate the foto before upload
 - [ ] Clean up and refactor code for future-proof
 - [ ] Improve search process
