@@ -81,6 +81,28 @@ def get_facets(es_client: Elasticsearch, index_name: str, fields: list[str], siz
     return results
 
 
+def generate_knn_search(query_vector, knn_k, top_n, filter_dict, window_size: int = 10):
+    return [
+        {
+            "knn": {
+                "field": field,
+                "query_vector": query_vector,
+                "k": knn_k,
+                "num_candidates": top_n,
+                **filter_dict,
+            },
+            # NOTE: we could also embed a query statement before knn and set weights for a hybrid "or"
+            # NOTE: score = 0.9 * match_score + 0.1 * knn_score
+            # NOTE: We could add a "rescore" with precise cosine similarity
+        }
+        for field in [
+            "image_vector",
+            "description_embedding",
+            "description_generated_embedding",
+        ]
+    ]
+
+
 def search_data(
     es_client: Elasticsearch,
     index_name: str,
@@ -115,17 +137,7 @@ def search_data(
                     filter_dict["filter"].append({"range": {key: range_}})
 
     if image_vector:
-        queries.append(
-            {
-                "knn": {
-                    "field": "image_vector",
-                    "query_vector": image_vector,
-                    "k": knn_k,
-                    "num_candidates": top_n,
-                    **filter_dict,
-                },
-            },
-        )
+        queries += generate_knn_search(image_vector, knn_k, top_n, filter_dict)
     if text_query:
         queries.append(
             {
@@ -138,7 +150,8 @@ def search_data(
                                 "fields": [
                                     "title^1",
                                     "description^3",
-                                    "location^0.5",
+                                    "city^0.5",
+                                    "country^0.5",
                                     "generated_description^2",
                                 ],
                                 "operator": "or",
@@ -151,21 +164,7 @@ def search_data(
             },
         )
     if text_vector:
-        queries.append(
-            {
-                "knn": {
-                    "field": field,
-                    "query_vector": text_vector,
-                    "k": knn_k,
-                    "num_candidates": top_n,
-                    **filter_dict,
-                }
-                for field in [
-                    "description_embedding",
-                    "description_generated_embedding",
-                ]
-            },
-        )
+        queries += generate_knn_search(text_vector, knn_k, top_n, filter_dict)
     if queries:
         return reciprocal_rank_fusion(
             es_client=es_client,

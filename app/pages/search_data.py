@@ -5,6 +5,7 @@ import logging
 from io import BytesIO
 
 import streamlit as st
+from elasticsearch import Elasticsearch
 from pages.utils.elastic import get_client
 from pages.utils.elastic import get_facets
 from pages.utils.elastic import search_data
@@ -17,7 +18,13 @@ from PIL import Image
 LOGGER = logging.getLogger(__file__)
 
 
-def search_engine(image_vector=None, text_query=None, text_vector=None, filters=None):
+def search_engine(
+    es_client: Elasticsearch,
+    image_vector=None,
+    text_query=None,
+    text_vector=None,
+    filters=None,
+):
     """
     Function for the search engine that handles all search types
     Args:
@@ -29,7 +36,7 @@ def search_engine(image_vector=None, text_query=None, text_vector=None, filters=
             List of search results
     """
     return search_data(
-        get_client(),
+        es_client,
         "images",
         text_query=text_query,
         text_vector=text_vector,
@@ -89,13 +96,26 @@ uploaded_file = st.file_uploader(
     type=["jpg", "jpeg", "png", "heic"],
 )
 
+st_zero_keys = [
+    "image_rotation",
+]
+for env in st_zero_keys:
+    if env not in st.session_state:
+        st.session_state[env] = 0
+
 image = None
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
+    image = image.rotate(st.session_state["image_rotation"] or 0)
     st.image(image, caption="Uploaded Image", width=250)
+    if st.button("rotate"):
+        st.session_state["image_rotation"] = (
+            (st.session_state["image_rotation"] or 0) + 90
+        ) % 360
+        st.rerun()
 
 st.subheader("Text Search")
-text_query = st.text_input("Enter search text (optional)")
+text_query = st.text_input("Enter search text (optional)", label_visibility="collapsed")
 
 # Sidebar for filtering options
 st.sidebar.header("Filter Options")
@@ -118,7 +138,7 @@ use_city_filter = st.sidebar.checkbox("Filter by city")
 selected_cities = []
 if use_city_filter:
     for city in cities:
-        if st.sidebar.checkbox(city, key=f"{city}_facet"):
+        if st.sidebar.checkbox(city, key=f"city_{city}_facet"):
             selected_cities.append(city)
 
 st.sidebar.subheader("Country Filter")
@@ -126,7 +146,7 @@ use_country_filter = st.sidebar.checkbox("Filter by country")
 selected_countries = []
 if use_country_filter:
     for country in countries:
-        if st.sidebar.checkbox(country, key=f"{country}_facet"):
+        if st.sidebar.checkbox(country, key=f"country_{country}_facet"):
             selected_countries.append(country)
 
 # Collect all filters
@@ -164,6 +184,7 @@ if st.button("Search"):
                 .tolist()
             )
         results = search_engine(
+            ES_CLIENT,
             image_vector=image_vector,
             text_query=text_query,
             text_vector=text_vector,

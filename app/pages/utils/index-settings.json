@@ -2,11 +2,16 @@
   "settings": {
     "analysis": {
       "char_filter": {
-        "remove_punctuation": {
-          "type": "pattern_replace",
-          "pattern": "[\\p{Punct}&&[^¿¡]]",
-          "replacement": ""
-        }
+          "remove_punctuation": {
+              "type": "pattern_replace",
+              "pattern": "[\\p{Punct}&&[^¿¡]]",
+              "replacement": ""
+          },
+          "spam_reduce": {
+              "type": "pattern_replace",
+              "pattern": "([aeiou])\1+",
+              "replacement": "$1"
+          }
       },
       "filter": {
         "spanish_stop": {
@@ -30,7 +35,8 @@
           "type": "custom",
           "char_filter": [
             "html_strip",
-            "remove_punctuation"
+            "remove_punctuation",
+            "spam_reduce"
           ],
           "tokenizer": "standard",
           "filter": [

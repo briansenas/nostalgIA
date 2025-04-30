@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import datetime
 import hashlib
-import os
 import re
 from io import BytesIO
 
@@ -129,8 +128,13 @@ st_env_keys = [
 for env in st_env_keys:
     if env not in st.session_state:
         st.session_state[env] = None
-if "uploaded_file" not in st.session_state:
-    st.session_state["uploaded_file"] = 0
+st_zero_keys = [
+    "uploaded_file",
+    "image_rotation",
+]
+for env in st_zero_keys:
+    if env not in st.session_state:
+        st.session_state[env] = 0
 
 if st.session_state["submitted"]:
     submit_action()
@@ -192,29 +196,33 @@ with preview_col:
             cache_get_exif_data.clear()
             cache_get_location_name.clear()
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", width=250)
+        image = image.rotate(st.session_state["image_rotation"] or 0)
+        if st.session_state["filename"]:
+            st.image(image, caption="Uploaded Image", width=250)
+            if st.button("rotate"):
+                st.session_state["image_rotation"] = (
+                    (st.session_state["image_rotation"] or 0) + 90
+                ) % 360
+                st.rerun()
 if uploaded_file is not None:
     try:
         image_date, image_gps_info = cache_get_exif_data(image)
     except TypeError:
         image_date = image_gps_info = None
     title_col, city_col, country_col, date_col = st.columns(4)
-    city = country = None
+    city = country = title = None
     if image_gps_info:
         city, country = cache_get_location_name(image_gps_info)
     with title_col:
         st.subheader("Title")
-        if (
-            st.session_state["title"] is None
-            and os.path.basename(uploaded_file.name) != st.session_state["title"]
-        ):
-            st.session_state["title"] = os.path.basename(uploaded_file.name)
-        title = st.text_input("Title", key="title")
+        if st.session_state["title"] is None and title != st.session_state["title"]:
+            st.session_state["title"] = title
+        title = st.text_input("Title", key="title", label_visibility="collapsed")
     with city_col:
         st.subheader("City")
         if st.session_state["city"] is None and st.session_state["city"] != city:
             st.session_state["city"] = city
-        city = st.text_input("City", key="city")
+        city = st.text_input("City", key="city", label_visibility="collapsed")
     with country_col:
         st.subheader("Country")
         if (
@@ -222,27 +230,36 @@ if uploaded_file is not None:
             and st.session_state["country"] != country
         ):
             st.session_state["country"] = country
-        country = st.text_input("Country", key="country")
+        country = st.text_input("Country", key="country", label_visibility="collapsed")
     with date_col:
         st.subheader("Date")
         if st.session_state["date"] is None and st.session_state["date"] != image_date:
             st.session_state["date"] = image_date
-        date = st.text_input("Date", key="date")
+        date = st.text_input("Date", key="date", label_visibility="collapsed")
     st.subheader("Auto-generated Description (optional)")
-    model, processor = cache_load_gemma_model()
-    llm_description = cache_generate_image_description(image, model, processor)
-    if (
-        st.session_state["generated_text_query"] is None
-        and st.session_state["generated_text_query"] != llm_description
-    ):
-        st.session_state["generated_text_query"] = llm_description
-    generated_text_query = st.text_input(
-        "Edit generated description (optional)",
-        key="generated_text_query",
-    )
+    gen_button, gen_text = st.columns([1, 5])
+    with gen_button:
+        if st.button("Generate", use_container_width=True):
+            model, processor = cache_load_gemma_model()
+            llm_description = cache_generate_image_description(image, model, processor)
+            if (
+                st.session_state["generated_text_query"] is None
+                and st.session_state["generated_text_query"] != llm_description
+            ):
+                st.session_state["generated_text_query"] = llm_description
+    with gen_text:
+        generated_text_query = st.text_input(
+            "Edit generated description (optional)",
+            key="generated_text_query",
+            label_visibility="collapsed",
+        )
 
 st.subheader("Description (optional)")
-text_query = st.text_input("Enter description (optional)", key="text_query")
+text_query = st.text_input(
+    "Enter description (optional)",
+    key="text_query",
+    label_visibility="collapsed",
+)
 
 st.subheader("Tags (optional)")
 tags_query = st.text_input(

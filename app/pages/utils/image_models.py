@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 
 import clip
+import requests
 import torch
 from huggingface_hub import login
 from PIL import Image
@@ -12,14 +13,19 @@ from transformers import Gemma3ForConditionalGeneration
 
 HF_TOKEN = os.environ.get("HF_TOKEN")
 assert HF_TOKEN is not None
-login(os.environ.get("HF_TOKEN"), new_session=True)
+try:
+    login(os.environ.get("HF_TOKEN"))
+except requests.exceptions.ConnectionError:
+    pass
 
 GEMMA_MODEL_ID = "google/gemma-3-4b-it"
+CLIP_MODEL_ID = "ViT-B/32"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load_clip_model(model_id=None):
-    model, preprocess = clip.load("ViT-B/32", device=DEVICE)
+    model_id = model_id if model_id else CLIP_MODEL_ID
+    model, preprocess = clip.load(model_id, device=DEVICE)
     return model, preprocess
 
 
@@ -101,7 +107,13 @@ Format: Only include one to two factual and descriptive sentences per image. Do 
     input_len = inputs["input_ids"].shape[-1]
 
     with torch.inference_mode():
-        generation = model.generate(**inputs, max_new_tokens=100, do_sample=False)
+        generation = model.generate(
+            **inputs,
+            max_new_tokens=100,
+            do_sample=False,
+            top_p=None,
+            top_k=None,
+        )
         generation = generation[0][input_len:]
 
     decoded = processor.decode(generation, skip_special_tokens=True)
