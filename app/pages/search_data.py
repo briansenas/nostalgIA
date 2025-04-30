@@ -45,8 +45,8 @@ def search_engine(
     )
 
 
-def fetch_facets(fields=["city", "country"], size: int = 20):
-    return get_facets(get_client(), "images", fields, size=size)
+def fetch_facets(filters, fields=["city", "country"], size: int = 20):
+    return get_facets(get_client(), "images", fields, filters, size=size)
 
 
 def display_results(results):
@@ -58,30 +58,35 @@ def display_results(results):
     for i, result in enumerate(results):
         document = result["_source"]
         with st.container():
-            col1, col2 = st.columns([1, 4])
+            image_col, text_col = st.columns([1, 9], vertical_alignment="center")
 
-            with col1:
+            with image_col:
                 res_bites = BytesIO(base64.b64decode(document["base64"]))
                 res_im = Image.open(res_bites)
-                if "_rrf_score" in result:
-                    st.write(f"Reciprocal Rank Similarity: {result['_rrf_score']}")
-                st.write(f"Similarity: {result['_score']}")
                 st.image(
                     res_im,
                     caption=document["title"],
-                    width=250,
                     use_container_width=True,
                 )
 
-            with col2:
+            with text_col:
+                rrf_score_col, es_score_col, _ = st.columns([1, 1, 1])
+                if "_rrf_score" in result:
+                    rrf_score_col.write(
+                        f"Reciprocal Rank Similarity: {result['_rrf_score']}",
+                    )
+                    es_score_col.write(f"Similarity: {result['_score']}")
+                else:
+                    rrf_score_col.write(f"Similarity: {result['_score']}")
                 st.markdown(
                     f"**Generated Description**: {document['generated_description']}",
                 )
                 st.write(f"**Description**: {document['description']}")
                 st.write(f"**Tags**: {', '.join(document['tags'] or [])}")
                 st.write(f"**Date**: {document['date']}")
-                st.write(f"**City**: {document['city']}")
-                st.write(f"**Country**: {document['country']}")
+                cols = st.columns(3)
+                cols[0].write(f"**City**: {document['city']}")
+                cols[1].write(f"**Country**: {document['country']}")
 
             st.divider()
 
@@ -91,11 +96,12 @@ st.title("Image Search Engine")
 st.write("Search for images using image files, text queries, or both")
 
 st.subheader("Image Search")
-uploaded_file = st.file_uploader(
-    "Upload an image (optional)",
-    type=["jpg", "jpeg", "png", "heic"],
-)
-
+upload_col, image_col, _ = st.columns([5, 1, 2])
+with upload_col:
+    uploaded_file = st.file_uploader(
+        "Upload an image (optional)",
+        type=["jpg", "jpeg", "png", "heic"],
+    )
 st_zero_keys = [
     "image_rotation",
 ]
@@ -103,16 +109,20 @@ for env in st_zero_keys:
     if env not in st.session_state:
         st.session_state[env] = 0
 
+if "filters" not in st.session_state:
+    st.session_state["filters"] = {}
+
 image = None
 if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    image = image.rotate(st.session_state["image_rotation"] or 0)
-    st.image(image, caption="Uploaded Image", width=250)
-    if st.button("rotate"):
-        st.session_state["image_rotation"] = (
-            (st.session_state["image_rotation"] or 0) + 90
-        ) % 360
-        st.rerun()
+    with image_col:
+        image = Image.open(uploaded_file)
+        image = image.rotate(st.session_state["image_rotation"] or 0)
+        st.image(image, caption="Uploaded Image", use_container_width=True)
+        if st.button("rotate"):
+            st.session_state["image_rotation"] = (
+                (st.session_state["image_rotation"] or 0) + 90
+            ) % 360
+            st.rerun()
 
 st.subheader("Text Search")
 text_query = st.text_input("Enter search text (optional)", label_visibility="collapsed")
@@ -130,7 +140,7 @@ if use_date_filter:
     start_date = col1.date_input("Start date")
     end_date = col2.date_input("End date")
 
-facets = fetch_facets()
+facets = fetch_facets(st.session_state["filters"])
 cities, countries = facets["city"], facets["country"]
 
 st.sidebar.subheader("City Filter")
@@ -164,6 +174,7 @@ filters = {
         "type": "term",
     },
 }
+st.session_state["filters"] = filters
 
 # Search button
 if st.button("Search"):

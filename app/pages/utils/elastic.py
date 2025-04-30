@@ -65,8 +65,25 @@ def index_data(es_client: Elasticsearch, index_name: str, payload: dict):
         return False
 
 
-def get_facets(es_client: Elasticsearch, index_name: str, fields: list[str], size=20):
-    payload: MutableMapping = {"size": 0, "aggs": {}}
+def get_facets(
+    es_client: Elasticsearch,
+    index_name: str,
+    fields: list[str],
+    filters,
+    size=20,
+):
+    payload: MutableMapping = {
+        "size": 0,
+        "query": {
+            "bool": {
+                "must": {
+                    "match_all": {},
+                },
+                **generate_filters(filters),
+            },
+        },
+        "aggs": {},
+    }
     for field in fields:
         payload["aggs"][f"{field}_facet"] = {
             "terms": {"field": field, "size": size},
@@ -103,6 +120,31 @@ def generate_knn_search(query_vector, knn_k, top_n, filter_dict, window_size: in
     ]
 
 
+def generate_filters(filters):
+    filter_dict: dict[str, Any] = {"filter": []}
+    if filters:
+        for key, filter_ in filters.items():
+            enabled = filter_["enabled"]
+            if enabled:
+                if "value" in filter_:
+                    data = filter_["value"]
+                    if data and isinstance(data, list):
+                        filter_dict["filter"].append({"terms": {key: filter_["value"]}})
+                    elif data:
+                        filter_dict["filter"].append({"term": {key: filter_["value"]}})
+                elif filter_["start"] or filter_["end"]:
+                    range_ = {}
+                    start_ = filter_["start"]
+                    end_ = filter_["end"]
+                    if start_:
+                        range_["gte"] = start_
+                    if end_:
+                        range_["lte"] = end_
+                    if range_:
+                        filter_dict["filter"].append({"range": {key: range_}})
+    return filter_dict
+
+
 def search_data(
     es_client: Elasticsearch,
     index_name: str,
@@ -115,27 +157,7 @@ def search_data(
     top_n=100,
 ):
     queries = []
-    filter_dict: dict[str, Any] = {"filter": []}
-    for key, filter_ in filters.items():
-        enabled = filter_["enabled"]
-        if enabled:
-            if "value" in filter_:
-                data = filter_["value"]
-                if data and isinstance(data, list):
-                    filter_dict["filter"].append({"terms": {key: filter_["value"]}})
-                elif data:
-                    filter_dict["filter"].append({"term": {key: filter_["value"]}})
-            elif filter_["start"] or filter_["end"]:
-                range_ = {}
-                start_ = filter_["start"]
-                end_ = filter_["end"]
-                if start_:
-                    range_["gte"] = start_
-                if end_:
-                    range_["lte"] = end_
-                if range_:
-                    filter_dict["filter"].append({"range": {key: range_}})
-
+    filter_dict = generate_filters(filters)
     if image_vector:
         queries += generate_knn_search(image_vector, knn_k, top_n, filter_dict)
     if text_query:
